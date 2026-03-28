@@ -3,9 +3,7 @@
   "port": 25565,
   "username": "yonzabot",
   "version": 1.21.1,
-
   "registerCommand": "/register mraeroxol@gmail.com",
   "codeCommand": "",
-
   "delayBeforeRegister": 3000
 }
