@@ -147,7 +147,7 @@ function giveKit(player) {
 
 function prankPlayer(player) {
   bot.chat(`/effect give ${player} health_boost infinite 255`)
-  setTimeout(() => bot.chat(`/effect give ${player} regeneration infinite 255`)
+  setTimeout(() => bot.chat(`/effect give ${player} regeneration infinite 255`), 1000)
   setTimeout(() => bot.chat(`/effect give ${player} fire_resistance infinite 255`), 1000)
   setTimeout(() => bot.chat(`/execute at ${player} run summon lightning_bolt`), 500)
   setTimeout(() => bot.chat(`/effect clear ${player} health_boost`), 2000)
