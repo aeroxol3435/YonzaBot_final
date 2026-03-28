@@ -1,88 +1,141 @@
 const mineflayer = require('mineflayer')
+const express = require('express')
 const config = require('./config.json')
 
-console.log("=================================")
-console.log(" Starting Mineflayer Register Bot ")
-console.log("=================================")
+/*
+========================
+EXPRESS SERVER (UPTIME)
+========================
+*/
 
-const bot = mineflayer.createBot({
-  host: config.host,
-  port: config.port,
-  username: config.username,
-  version: config.version
+const app = express()
+const PORT = process.env.PORT || 3000
+
+app.get('/', (req, res) => {
+  res.send("Bot is alive.")
+})
+
+app.listen(PORT, () => {
+  console.log(`Express server running on port ${PORT}`)
 })
 
 /*
 ========================
-BASIC EVENTS
+BOT SYSTEM
 ========================
 */
 
-bot.on('login', () => {
-  console.log(`[LOGIN] Logged in as ${bot.username}`)
-})
+function createBot() {
 
-bot.on('spawn', () => {
-  console.log("[SPAWN] Bot joined the server.")
+  const bot = mineflayer.createBot({
+    host: config.host,
+    port: config.port,
+    username: config.username,
+    version: config.version
+  })
 
-  setTimeout(() => {
+  const cooldowns = new Map()
 
-    // REGISTER COMMAND
-    if (config.registerCommand && config.registerCommand.trim() !== "") {
-      console.log(`[ACTION] Sending register command: ${config.registerCommand}`)
-      bot.chat(config.registerCommand)
-    } else {
-      console.log("[SKIP] registerCommand is empty.")
+  function isOnCooldown(player) {
+    if (!cooldowns.has(player)) return false
+    const expiration = cooldowns.get(player)
+    return Date.now() < expiration
+  }
+
+  function setCooldown(player) {
+    cooldowns.set(player, Date.now() + 10000) // 10 seconds
+  }
+
+  bot.on('spawn', () => {
+    console.log("[SPAWN] Joined server.")
+
+    // Join message after 3 sec
+    setTimeout(() => {
+      bot.chat("Im back bro finally")
+    }, 3000)
+
+    // Every 5 minutes message
+    setInterval(() => {
+      bot.chat("you guys are alive or not bruh?")
+    }, 300000)
+  })
+
+  bot.on('chat', async (username, message) => {
+    if (username === bot.username) return
+
+    // Cooldown check
+    if (isOnCooldown(username)) {
+      bot.chat(`/minecraft:msg ${username} you are in 10 seconds cooldown.`)
+      return
     }
 
-    // CODE CONFIRMATION COMMAND
-    if (config.codeCommand && config.codeCommand.trim() !== "") {
-      console.log(`[ACTION] Sending code confirmation: ${config.codeCommand}`)
-      bot.chat(config.codeCommand)
-    } else {
-      console.log("[SKIP] codeCommand is empty. Not sending confirmation.")
+    /*
+    ========================
+    PUBLIC COMMAND
+    ========================
+    */
+
+    if (message === "~ping") {
+      setCooldown(username)
+      bot.chat("pong")
+      return
     }
 
-  }, config.delayBeforeRegister)
-})
+    /*
+    ========================
+    OWNER ONLY COMMAND
+    ========================
+    */
 
-/*
-========================
-CHAT LOGGER
-========================
-*/
+    if (message.startsWith("~kit")) {
 
-// Normal player chat
-bot.on('chat', (username, message) => {
-  console.log(`[CHAT] ${username}: ${message}`)
-})
+      if (username !== config.owner) {
+        setCooldown(username)
+        bot.chat(`/minecraft:msg ${username} you are not my owner lil bro.`)
+        return
+      }
 
-// ALL messages (server, plugins, system, json messages)
-bot.on('message', (message) => {
-  console.log(`[RAW MESSAGE] ${message.toString()}`)
-})
+      if (isOnCooldown(username)) {
+        bot.chat(`/minecraft:msg ${username} you are in 10 seconds cooldown.`)
+        return
+      }
 
-// Whisper messages
-bot.on('whisper', (username, message) => {
-  console.log(`[WHISPER] ${username}: ${message}`)
-})
+      setCooldown(username)
 
-/*
-========================
-ERROR HANDLING
-========================
-*/
+      const args = message.split(" ")
+      const target = args[1] ? args[1] : username
 
-bot.on('kicked', (reason) => {
-  console.log("[KICKED] Bot was kicked.")
-  console.log(reason)
-})
+      const items = [
+        `diamond_block 64`,
+        `netherite_block 64`,
+        `enchanted_golden_apple 64`
+      ]
 
-bot.on('error', (err) => {
-  console.log("[ERROR]")
-  console.log(err)
-})
+      for (let item of items) {
+        bot.chat(`/give ${target} ${item}`)
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
 
-bot.on('end', () => {
-  console.log("[END] Bot disconnected.")
-})
+      return
+    }
+  })
+
+  bot.on('message', (msg) => {
+    console.log("[RAW]", msg.toString())
+  })
+
+  bot.on('kicked', (reason) => {
+    console.log("[KICKED]", reason)
+  })
+
+  bot.on('end', () => {
+    console.log("[END] Reconnecting in 10 seconds...")
+    setTimeout(createBot, 10000)
+  })
+
+  bot.on('error', (err) => {
+    console.log("[ERROR]", err)
+  })
+}
+
+createBot()
