@@ -1,9 +1,7 @@
 {
-  "host": "6b6t.org",
-  "port": 25565,
-  "username": "yonzabot",
+  "host": "free-01.blockhost.cloud",
+  "port": 19134,
+  "username": "YonzaBot",
   "version": "1.21.1",
-  "registerCommand": "/register mraeroxol@gmail.com",
-  "codeCommand": "",
-  "delayBeforeRegister": 3000
+  "owner": "alifthepro123"
 }
