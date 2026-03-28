@@ -7,7 +7,9 @@ const config = require('./config.json')
 let bot
 let isOnline = false
 let afkMode = false
+
 let cooldowns = new Map()
+let stareCooldown = new Map()
 let chatLogs = []
 
 function logChat(text) {
@@ -31,33 +33,38 @@ function createBot() {
     isOnline = false
   })
 
-  // GAME CHAT LOGGER (NO CONSOLE LOG)
+  // PUBLIC CHAT
   bot.on('chat', (username, message) => {
     if (username === bot.username) return
     logChat(`[CHAT] ${username}: ${message}`)
 
     // PUBLIC COMMANDS
     if (message === "~ping") return publicCmd(username, () => bot.chat("pong"))
-    if (message === "~cmds") return publicCmd(username, () => bot.chat("Public: ~ping ~cmds ~info ~whoami ~test"))
     if (message === "~whoami") return publicCmd(username, () => bot.chat(`you are ${username}`))
     if (message === "~test") return publicCmd(username, () => bot.chat("Huh?"))
+    if (message === "~cmds") return publicCmd(username, () =>
+      bot.chat("Public: ~ping ~whoami ~info ~test ~uptime")
+    )
+    if (message === "~uptime") return publicCmd(username, () =>
+      bot.chat(`Uptime: ${process.uptime().toFixed(0)}s`)
+    )
     if (message === "~info") {
       return publicCmd(username, () => {
-        const uptime = process.uptime().toFixed(0)
         const ram = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)
         const cpu = os.loadavg()[0].toFixed(2)
-
-        bot.chat(`Bot: ${bot.username} | Uptime: ${uptime}s | RAM: ${ram}MB | CPU: ${cpu}`)
+        bot.chat(`Bot: ${bot.username} | RAM: ${ram}MB | CPU: ${cpu}`)
       })
     }
 
-    // OWNER COMMANDS (ALSO WORK IN PUBLIC)
+    // OWNER COMMANDS (WORK IN PUBLIC)
     if (username === config.owner) {
-      handleOwnerCommands(username, message)
+      handleOwner(username, message)
     }
   })
 
+  // PRIVATE MESSAGE
   bot.on('whisper', (username, message) => {
+    if (username === bot.username) return
     logChat(`[MSG] ${username}: ${message}`)
 
     if (username !== config.owner) {
@@ -65,10 +72,10 @@ function createBot() {
       return
     }
 
-    handleOwnerCommands(username, message)
+    handleOwner(username, message)
   })
 
-  // 5 BLOCK STARE SYSTEM
+  // 5 BLOCK STARE SYSTEM (ANTI-SPAM)
   bot.on('physicTick', () => {
     const nearest = bot.nearestEntity(e => e.type === 'player' && e.username !== bot.username)
     if (!nearest) return
@@ -77,21 +84,26 @@ function createBot() {
 
     if (dist <= 5) {
       bot.setControlState('sneak', true)
-      bot.lookAt(nearest.position.offset(0, 1.6, 0))
-      bot.chat(`/minecraft:msg ${nearest.username} ${nearest.username}, what are you doing here huh?`)
+      bot.lookAt(nearest.position.offset(0, 1.6, 0), true)
+
+      if (!stareCooldown.has(nearest.username) ||
+          Date.now() - stareCooldown.get(nearest.username) > 600000) {
+
+        bot.chat(`/minecraft:msg ${nearest.username} ${nearest.username}, what are you doing here huh?`)
+        stareCooldown.set(nearest.username, Date.now())
+      }
     } else {
       bot.setControlState('sneak', false)
     }
   })
 }
 
-function handleOwnerCommands(username, message) {
-  if (isCooldown(username)) {
-    bot.chat(`/minecraft:msg ${username} you are in 10 seconds cooldown.`)
+function handleOwner(username, message) {
+  // OWNER BYPASSES COOLDOWN
+  if (message === "~owner_cmds") {
+    bot.chat("Owner: ~kit ~say ~tpme ~tpto ~prank ~afk_mode")
     return
   }
-
-  setCooldown(username)
 
   if (message === "~kit") return giveKit(username)
   if (message.startsWith("~kit ")) return giveKit(message.split(" ")[1])
@@ -105,12 +117,7 @@ function handleOwnerCommands(username, message) {
   }
 
   if (message.startsWith("~tpto ")) {
-    const target = message.split(" ")[1]
-    bot.chat(`/tp ${bot.username} ${target}`)
-  }
-
-  if (message === "~owner_cmds") {
-    bot.chat("Owner: ~kit ~say ~tpme ~tpto ~owner_cmds ~prank ~afk_mode")
+    bot.chat(`/tp ${bot.username} ${message.split(" ")[1]}`)
   }
 
   if (message.startsWith("~afk_mode ")) {
@@ -140,6 +147,7 @@ function giveKit(player) {
 
 function prankPlayer(player) {
   bot.chat(`/effect give ${player} health_boost infinite 255`)
+  setTimeout(() => bot.chat(`/effect give ${player} regeneration infinite 255`)
   setTimeout(() => bot.chat(`/effect give ${player} fire_resistance infinite 255`), 1000)
   setTimeout(() => bot.chat(`/execute at ${player} run summon lightning_bolt`), 500)
   setTimeout(() => bot.chat(`/effect clear ${player} health_boost`), 2000)
@@ -148,21 +156,15 @@ function prankPlayer(player) {
 }
 
 function publicCmd(user, callback) {
-  if (isCooldown(user)) {
+  if (user === config.owner) return callback()
+
+  if (cooldowns.has(user) && Date.now() - cooldowns.get(user) < 10000) {
     bot.chat(`/minecraft:msg ${user} you are in 10 seconds cooldown.`)
     return
   }
-  setCooldown(user)
-  callback()
-}
 
-function setCooldown(user) {
   cooldowns.set(user, Date.now())
-}
-
-function isCooldown(user) {
-  if (!cooldowns.has(user)) return false
-  return Date.now() - cooldowns.get(user) < 10000
+  callback()
 }
 
 createBot()
@@ -191,7 +193,7 @@ app.get("/", (req, res) => {
       ${chatLogs.join("<br>")}
     </div>
 
-    <h3>Send Command</h3>
+    <h3>Send Chat</h3>
     <form method="POST" action="/send">
       <input name="cmd" style="width:300px;" placeholder="/chat hello">
       <button type="submit">Send</button>
